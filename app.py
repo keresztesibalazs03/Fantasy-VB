@@ -7,12 +7,53 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
 
 # --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ ---
+import streamlit as st
+import pandas as pd
+import random
+import json
+import gspread
+
+st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
+
+# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ (STABIL GSPREAD VERZIÓ) ---
 try:
-    creds_json = json.loads(st.secrets["google_credentials"]["json"])
-    conn = st.connection("gsheets", type=GSheetsConnection, service_account_info=creds_json)
+    creds_dict = json.loads(st.secrets["google_credentials"]["json"])
+    gc = gspread.service_account_from_dict(creds_dict)
+    # Megnyitjuk a táblázatot az URL alapján
+    sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/191B5mrm4MJrRX4dvpYyninsq3VwOnEpVoaK2UR03jTY/edit")
+    worksheet = sh.worksheet("Munkalap1")
 except Exception as e:
-    st.error("Nem sikerült csatlakozni a Google Táblázathoz. Ellenőrizd a Secrets beállításokat!")
+    st.error(f"Nem sikerült csatlakozni a Google Táblázathoz: {e}")
     st.stop()
+
+def load_data():
+    try:
+        # Beolvassuk az összes adatot a Munkalap1-ről
+        records = worksheet.get_all_records()
+        if records:
+            df = pd.DataFrame(records)
+            if "Adatok" in df.columns and not pd.isna(df["Adatok"].iloc[0]):
+                return json.loads(df["Adatok"].iloc[0])
+    except:
+        pass
+    return {
+        "matches": [],
+        "ko_state": {
+            'generated': False,
+            'R32': [{'home': None, 'away': None, 'winner': None} for _ in range(16)],
+            'R16': [{'home': None, 'away': None, 'winner': None} for _ in range(8)],
+            'QF':  [{'home': None, 'away': None, 'winner': None} for _ in range(4)],
+            'SF':  [{'home': None, 'away': None, 'winner': None} for _ in range(2)],
+            'F':   [{'home': None, 'away': None, 'winner': None} for _ in range(1)]
+        }
+    }
+
+def save_data():
+    mentes_dict = {"matches": st.session_state.matches, "ko_state": st.session_state.ko_state}
+    # Töröljük a régi tartalmat és beírjuk az újat
+    worksheet.clear()
+    # Gspread-nél fejléc + érték kell listaként
+    worksheet.update(range_name="A1:A2", values=[["Adatok"], [json.dumps(mentes_dict, ensure_ascii=False)]])
 
 def load_data():
     try:
