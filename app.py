@@ -6,12 +6,29 @@ import gspread
 
 st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
 
-# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ (STABIL GSPREAD VERZIÓ) ---
+# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ (BOMBABIZTOS JAVÍTOTT VERZIÓ) ---
 try:
-    creds_dict = json.loads(st.secrets["google_credentials"]["json"])
+    # A titkos kulcsból kiszedjük a hibát okozó nyers sortöréseket, és visszaállítjuk az igaziakat
+    raw_key = st.secrets["google_credentials"]["private_key"]
+    clean_key = raw_key.replace("\\n", "\n")
+    
+    # Kézzel rakjuk össze a hitelesítési szótárat, így nincs JSON formázási hiba!
+    creds_dict = {
+        "type": "service_account",
+        "project_id": "fifa-vb-projekt",
+        "private_key_id": "2f6bc39019e239ba981dd32efc9ffe9f53843789",
+        "private_key": clean_key,
+        "client_email": "fifa-robot@fifa-vb-projekt.iam.gserviceaccount.com",
+        "client_id": "109571828401921755693",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/fifa-robot%40fifa-vb-projekt.iam.gserviceaccount.com",
+        "universe_domain": "googleapis.com"
+    }
+    
     gc = gspread.service_account_from_dict(creds_dict)
-    # Megnyitjuk a táblázatot az URL alapján
-    sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/191B5mrm4MJrRX4dvpYyninsq3VwOnEpVoaK2UR03jTY/edit")
+    sh = gc.open_by_url(st.secrets["connections.gsheets"]["spreadsheet"])
     worksheet = sh.worksheet("Munkalap1")
 except Exception as e:
     st.error(f"Nem sikerült csatlakozni a Google Táblázathoz: {e}")
