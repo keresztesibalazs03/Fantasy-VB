@@ -2,15 +2,6 @@ import streamlit as st
 import pandas as pd
 import random
 import json
-from streamlit_gsheets import GSheetsConnection
-
-st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
-
-# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ ---
-import streamlit as st
-import pandas as pd
-import random
-import json
 import gspread
 
 st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
