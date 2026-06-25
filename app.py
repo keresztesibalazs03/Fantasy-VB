@@ -1,4 +1,15 @@
 import streamlit as st
+
+st.write("Csatlakozás tesztelése...")
+try:
+    conn = st.connection("gsheets", type="gsheets")
+    st.write("A kapcsolatot megtalálta a secrets-ben.")
+    df = conn.read()
+    st.write("Sikeresen beolvasva!")
+except Exception as e:
+    st.error(f"Hiba történt: {e}")
+
+import streamlit as st
 import pandas as pd
 import random
 import json
