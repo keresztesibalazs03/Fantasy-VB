@@ -32,7 +32,9 @@ try:
     sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/191B5mrm4MJrRX4dvpYyninsq3VwOnEpVoaK2UR03jTY/edit")
     worksheet = sh.worksheet("Munkalap1")
 except Exception as e:
-    st.error(f"Nem sikerült csatlakozni a Google Táblázathoz: {e}")
+    import traceback
+    st.error("Nem sikerült csatlakozni a Google Táblázathoz:")
+    st.code(traceback.format_exc())
     st.stop()
 
 # --- ADATKEZELŐ FÜGGVÉNYEK (JAVÍTOTT, TISZTA VERZIÓK) ---
