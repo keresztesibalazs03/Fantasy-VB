@@ -6,7 +6,7 @@ import gspread
 
 st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
 
-# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ (BOMBABIZTOS JAVÍTOTT VERZIÓ) ---
+# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ (BEÉGETETT URL VERZIÓ) ---
 try:
     # A titkos kulcsból kiszedjük a hibát okozó nyers sortöréseket, és visszaállítjuk az igaziakat
     raw_key = st.secrets["google_credentials"]["private_key"]
@@ -22,13 +22,14 @@ try:
         "client_id": "109571828401921755693",
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/raw/certs",
         "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/fifa-robot%40fifa-vb-projekt.iam.gserviceaccount.com",
         "universe_domain": "googleapis.com"
     }
     
     gc = gspread.service_account_from_dict(creds_dict)
-    sh = gc.open_by_url(st.secrets["connections.gsheets"]["spreadsheet"])
+    # Közvetlenül az URL-t adjuk meg, nem kérjük el a Secrets-től!
+    sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/191B5mrm4MJrRX4dvpYyninsq3VwOnEpVoaK2UR03jTY/edit")
     worksheet = sh.worksheet("Munkalap1")
 except Exception as e:
     st.error(f"Nem sikerült csatlakozni a Google Táblázathoz: {e}")
