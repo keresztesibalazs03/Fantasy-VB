@@ -160,6 +160,7 @@ def generate_valid_draw(seeded_unused, unseeded_unused):
         return "Üres ág"
 
     # 3. A HIVATALOS FIFA 2026-OS MECCSTÁBLA (Legjobb 32 fix párosításai)
+    # 3. A HIVATALOS FIFA 2026-OS MECCSTÁBLA (Legjobb 32 fix párosításai)
     matchups = []
     matchups.append((group_results["A1"], get_3rd(["C", "D", "E"])))
     matchups.append((group_results["B2"], group_results["F2"]))
@@ -169,4 +170,16 @@ def generate_valid_draw(seeded_unused, unseeded_unused):
     matchups.append((group_results["C1"], get_3rd(["F", "G", "H"])))
     matchups.append((group_results["D2"], group_results["H2"]))
     matchups.append((group_results["G1"], get_3rd(["E", "F", "H"])))
-    matchups.append((group_results
+    matchups.append((group_results["I2"], group_results["J2"]))
+    
+    matchups.append((group_results["B1"], get_3rd(["E", "F", "G"])))
+    matchups.append((group_results["A2"], group_results["C2"]))
+    matchups.append((group_results["D1"], get_3rd(["I", "J", "K", "L"])))
+    matchups.append((group_results["H1"], get_3rd(["J", "K", "L"])))
+    
+    matchups.append((group_results["I1"], get_3rd(["C", "D", "E", "F"])))
+    matchups.append((group_results["E2"], group_results["K2"]))
+    matchups.append((group_results["J1"], get_3rd(["G", "H", "I"])))
+    matchups.append((group_results["K1"], group_results["L2"]))
+    
+    return matchups
