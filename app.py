@@ -131,16 +131,20 @@ def generate_valid_draw(seeded_unused, unseeded_unused):
     group_results = {}
     all_3rds = []
     
-    # 1. Kigyűjtjük az összes csoport 1., 2. helyezettjét betűk alapján (A, B, C...)
-    for g_name, g_teams in GROUPS.items():
-        sub_df = df_group.loc[g_teams].sort_values(by=['P', 'GK', 'RG'], ascending=False).reset_index()
-        g_letter = g_name.split()[0]  # Kinyeri az "A", "B" stb. betűt
-        group_results[f"{g_letter}1"] = sub_df.iloc[0]['index']
-        group_results[f"{g_letter}2"] = sub_df.iloc[1]['index']
-        all_3rds.append({
-            'name': sub_df.iloc[2]['index'], 'group': g_letter,
-            'P': sub_df.iloc[2]['P'], 'GK': sub_df.iloc[2]['GK'], 'RG': sub_df.iloc[2]['RG']
-        })
+    try:
+        # 1. Kigyűjtjük az összes csoport 1., 2. helyezettjét betűk alapján (A, B, C...)
+        for g_name, g_teams in GROUPS.items():
+            sub_df = df_group.loc[g_teams].sort_values(by=['P', 'GK', 'RG'], ascending=False).reset_index()
+            g_letter = g_name.split()[0]  # Kinyeri az "A", "B" stb. betűt
+            group_results[f"{g_letter}1"] = sub_df.iloc[0]['index']
+            group_results[f"{g_letter}2"] = sub_df.iloc[1]['index']
+            all_3rds.append({
+                'name': sub_df.iloc[2]['index'], 'group': g_letter,
+                'P': sub_df.iloc[2]['P'], 'GK': sub_df.iloc[2]['GK'], 'RG': sub_df.iloc[2]['RG']
+            })
+    except Exception:
+        st.warning("⚠️ Előbb rögzítsd a csoportmeccsek eredményeit, hogy kialakuljon a tabella!")
+        return None
     
     # 2. Kiválasztjuk a 8 legjobb csoportharmadikat teljesítmény szerint
     best_3rds_sorted = sorted(all_3rds, key=lambda x: (x['P'], x['GK'], x['RG']), reverse=True)[:8]
@@ -160,26 +164,25 @@ def generate_valid_draw(seeded_unused, unseeded_unused):
         return "Üres ág"
 
     # 3. A HIVATALOS FIFA 2026-OS MECCSTÁBLA (Legjobb 32 fix párosításai)
-    # 3. A HIVATALOS FIFA 2026-OS MECCSTÁBLA (Legjobb 32 fix párosításai)
     matchups = []
-    matchups.append((group_results["A1"], get_3rd(["C", "D", "E"])))
-    matchups.append((group_results["B2"], group_results["F2"]))
-    matchups.append((group_results["E1"], get_3rd(["A", "B", "C", "D"])))
-    matchups.append((group_results["F1"], group_results["G2"]))
+    matchups.append((group_results.get("A1", "A1"), get_3rd(["C", "D", "E"])))
+    matchups.append((group_results.get("B2", "B2"), group_results.get("F2", "F2")))
+    matchups.append((group_results.get("E1", "E1"), get_3rd(["A", "B", "C", "D"])))
+    matchups.append((group_results.get("F1", "F1"), group_results.get("G2", "G2")))
     
-    matchups.append((group_results["C1"], get_3rd(["F", "G", "H"])))
-    matchups.append((group_results["D2"], group_results["H2"]))
-    matchups.append((group_results["G1"], get_3rd(["E", "F", "H"])))
-    matchups.append((group_results["I2"], group_results["J2"]))
+    matchups.append((group_results.get("C1", "C1"), get_3rd(["F", "G", "H"])))
+    matchups.append((group_results.get("D2", "D2"), group_results.get("H2", "H2")))
+    matchups.append((group_results.get("G1", "G1"), get_3rd(["E", "F", "H"])))
+    matchups.append((group_results.get("I2", "I2"), group_results.get("J2", "J2")))
     
-    matchups.append((group_results["B1"], get_3rd(["E", "F", "G"])))
-    matchups.append((group_results["A2"], group_results["C2"]))
-    matchups.append((group_results["D1"], get_3rd(["I", "J", "K", "L"])))
-    matchups.append((group_results["H1"], get_3rd(["J", "K", "L"])))
+    matchups.append((group_results.get("B1", "B1"), get_3rd(["E", "F", "G"])))
+    matchups.append((group_results.get("A2", "A2"), group_results.get("C2", "C2")))
+    matchups.append((group_results.get("D1", "D1"), get_3rd(["I", "J", "K", "L"])))
+    matchups.append((group_results.get("H1", "H1"), group_results.get("J2", "J2") if "J2" in group_results else group_results.get("L2", "L2")))
     
-    matchups.append((group_results["I1"], get_3rd(["C", "D", "E", "F"])))
-    matchups.append((group_results["E2"], group_results["K2"]))
-    matchups.append((group_results["J1"], get_3rd(["G", "H", "I"])))
-    matchups.append((group_results["K1"], group_results["L2"]))
+    matchups.append((group_results.get("I1", "I1"), get_3rd(["C", "D", "E", "F"])))
+    matchups.append((group_results.get("E2", "E2"), group_results.get("K2", "K2") if "K2" in group_results else group_results.get("I2", "I2")))
+    matchups.append((group_results.get("J1", "J1"), get_3rd(["G", "H", "I"])))
+    matchups.append((group_results.get("K1", "K1"), group_results.get("L2", "L2")))
     
     return matchups
