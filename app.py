@@ -6,7 +6,7 @@ import gspread
 
 st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
 
-# --- HIVATALOS 2026-OS VB CSOPORTOK (Előrehozva, hogy minden függvény lássa) ---
+# --- HIVATALOS 2026-OS VB CSOPORTOK ---
 GROUPS = {
     "A csoport": ["Mexikó", "Dél-Afrika", "Dél-Korea", "Csehország"],
     "B csoport": ["Kanada", "Bosznia-Hercegovina", "Katar", "Svájc"],
@@ -26,7 +26,21 @@ all_teams_list = []
 for g_teams in GROUPS.values():
     all_teams_list.extend(g_teams)
 
-# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ (BEÉGETETT URL VERZIÓ) ---
+# --- ALAPÉRTELMEZETT STRUKTÚRA ÜRES ADATOK ESETÉRE ---
+DEFAULT_DATA = {
+    "matches": [],
+    "ko_state": {
+        'generated': False,
+        'R32': [{'home': None, 'away': None, 'winner': None} for _ in range(16)],
+        'R16': [{'home': None, 'away': None, 'winner': None} for _ in range(8)],
+        'QF':  [{'home': None, 'away': None, 'winner': None} for _ in range(4)],
+        'SF':  [{'home': None, 'away': None, 'winner': None} for _ in range(2)],
+        'F':   [{'home': None, 'away': None, 'winner': None} for _ in range(1)]
+    }
+}
+
+# --- CSATLAKOZÁS A GOOGLE TÁBLÁZATHOZ ---
+worksheet = None
 try:
     raw_key = st.secrets["google_credentials"]["private_key"]
     clean_key = raw_key.replace("\\n", "\n")
@@ -49,27 +63,12 @@ try:
     sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/191B5mrm4MJrRX4dvpYyninsq3VwOnEpVoaK2UR03jTY/edit")
     worksheet = sh.worksheet("Munkalap1")
 except Exception as e:
-    import traceback
-    st.error("Nem sikerült csatlakozni a Google Táblázathoz:")
-    st.code(traceback.format_exc())
-    st.stop()
-
-# --- ALAPÉRTELMEZETT STRUKTÚRA ÜRES ADATOK ESETÉRE ---
-DEFAULT_DATA = {
-    "matches": [],
-    "ko_state": {
-        'generated': False,
-        'R32': [{'home': None, 'away': None, 'winner': None} for _ in range(16)],
-        'R16': [{'home': None, 'away': None, 'winner': None} for _ in range(8)],
-        'QF':  [{'home': None, 'away': None, 'winner': None} for _ in range(4)],
-        'SF':  [{'home': None, 'away': None, 'winner': None} for _ in range(2)],
-        'F':   [{'home': None, 'away': None, 'winner': None} for _ in range(1)]
-    }
-}
+    st.sidebar.error("⚠️ Google Táblázat kapcsolat sikertelen offline módban fut.")
 
 # --- ADATKEZELŐ FÜGGVÉNYEK ---
 def load_data():
-    global worksheet
+    if worksheet is None:
+        return DEFAULT_DATA
     try:
         records = worksheet.get_all_records()
         if records:
@@ -84,7 +83,8 @@ def load_data():
     return DEFAULT_DATA
 
 def save_data():
-    global worksheet
+    if worksheet is None:
+        return
     mentes_dict = {"matches": st.session_state.matches, "ko_state": st.session_state.ko_state}
     try:
         worksheet.clear()
@@ -125,6 +125,67 @@ def get_all_scorers():
             if s.strip(): scorers[s.strip()] = scorers.get(s.strip(), 0) + 1
     return scorers
 
+# --- HIVATALOS FIFA 2026 EGYSÉGES RENDEZŐ FÜGGVÉNY (Egymás elleni alapon) ---
+def sort_group_teams_official(teams):
+    df_all = calculate_group_stats()
+    sub_df = df_all.loc[teams].copy()
+    
+    # Kigyűjtjük az egymás elleni meccseket a csoportban lévő csapatok között
+    group_matches = []
+    for m in st.session_state.matches:
+        if m.get('type') == 'group' and m['home'] in teams and m['away'] in teams:
+            group_matches.append(m)
+            
+    def get_h2h_score(t1, t2):
+        # t1 pontjai, gólkülönbsége, lőtt gólja t2 ellen
+        pts, rg, kg = 0, 0, 0
+        for m in group_matches:
+            if m['home'] == t1 and m['away'] == t2:
+                rg += m['h_goals']; kg += m['a_goals']
+                if m['h_goals'] > m['a_goals']: pts += 3
+                elif m['h_goals'] == m['a_goals']: pts += 1
+            elif m['away'] == t1 and m['home'] == t2:
+                rg += m['a_goals']; kg += m['h_goals']
+                if m['a_goals'] > m['h_goals']: pts += 3
+                elif m['a_goals'] == m['h_goals']: pts += 1
+        return pts, rg - kg, rg
+
+    # Kiszámoljuk a rendezési kulcsot minden csapatnak a FIFA 2026 szabályzat szerint
+    # 1. Alappontok (P)
+    # 2. Egymás elleni pontok (H2H P)
+    # 3. Egymás elleni gólkülönbség (H2H GK)
+    # 4. Egymás elleni lőtt gól (H2H RG)
+    # 5. Összesített gólkülönbség (GK)
+    # 6. Összesített lőtt gól (RG)
+    
+    sort_data = []
+    for t in teams:
+        row = sub_df.loc[t]
+        # Összehasonlítás más csapatokkal holtverseny esetére
+        h2h_p_sum, h2h_gk_sum, h2h_rg_sum = 0, 0, 0
+        for opponent in teams:
+            if opponent != t:
+                # Csak akkor számít az egymás elleni, ha azonos pontszámon állnak az összetettben
+                if sub_df.loc[opponent]['P'] == row['P']:
+                    p, gk, rg = get_h2h_score(t, opponent)
+                    h2h_p_sum += p
+                    h2h_gk_sum += gk
+                    h2h_rg_sum += rg
+                    
+        sort_data.append({
+            'team': t,
+            'P': row['P'],
+            'H2H_P': h2h_p_sum,
+            'H2H_GK': h2h_gk_sum,
+            'H2H_RG': h2h_rg_sum,
+            'GK': row['GK'],
+            'RG': row['RG']
+        })
+        
+    # Python rendezés a prioritások szerint (descending)
+    sorted_structures = sorted(sort_data, key=lambda x: (x['P'], x['H2H_P'], x['H2H_GK'], x['H2H_RG'], x['GK'], x['RG']), reverse=True)
+    return [x['team'] for x in sorted_structures]
+
 # --- HIVATALOS FIFA 2026-OS ÁGRENDSZER GENERÁLÓ ---
 def generate_valid_draw(seeded_unused, unseeded_unused):
     df_group = calculate_group_stats()
@@ -132,24 +193,25 @@ def generate_valid_draw(seeded_unused, unseeded_unused):
     all_3rds = []
     
     try:
-        # 1. Kigyűjtjük az összes csoport 1., 2. helyezettjét betűk alapján (A, B, C...)
         for g_name, g_teams in GROUPS.items():
-            sub_df = df_group.loc[g_teams].sort_values(by=['P', 'GK', 'RG'], ascending=False).reset_index()
-            g_letter = g_name.split()[0]  # Kinyeri az "A", "B" stb. betűt
-            group_results[f"{g_letter}1"] = sub_df.iloc[0]['index']
-            group_results[f"{g_letter}2"] = sub_df.iloc[1]['index']
+            sorted_teams = sort_group_teams_official(g_teams)
+            g_letter = g_name.split()[0]
+            
+            group_results[f"{g_letter}1"] = sorted_teams[0]
+            group_results[f"{g_letter}2"] = sorted_teams[1]
+            
+            t3 = sorted_teams[2]
+            row3 = df_group.loc[t3]
             all_3rds.append({
-                'name': sub_df.iloc[2]['index'], 'group': g_letter,
-                'P': sub_df.iloc[2]['P'], 'GK': sub_df.iloc[2]['GK'], 'RG': sub_df.iloc[2]['RG']
+                'name': t3, 'group': g_letter,
+                'P': row3['P'], 'GK': row3['GK'], 'RG': row3['RG']
             })
     except Exception:
         return None
     
-    # 2. Kiválasztjuk a 8 legjobb csoportharmadikat teljesítmény szerint
     best_3rds_sorted = sorted(all_3rds, key=lambda x: (x['P'], x['GK'], x['RG']), reverse=True)[:8]
     m3 = {x['group']: x['name'] for x in best_3rds_sorted}
     
-    # Kiosztó logika a FIFA prioritási listája alapján
     def get_3rd(preferred_groups):
         for g in preferred_groups:
             if g in m3:
@@ -162,7 +224,6 @@ def generate_valid_draw(seeded_unused, unseeded_unused):
             return val
         return "Üres ág"
 
-    # 3. A HIVATALOS FIFA 2026-OS MECCSTÁBLA (Legjobb 32 fix párosításai)
     matchups = []
     matchups.append((group_results.get("A1", "A1"), get_3rd(["C", "D", "E"])))
     matchups.append((group_results.get("B2", "B2"), group_results.get("F2", "F2")))
@@ -187,7 +248,7 @@ def generate_valid_draw(seeded_unused, unseeded_unused):
     return matchups
 
 st.title("🏆 FIFA 2026 VB - Cloud Dashboard")
-st.caption("Élő adatbázis kapcsolat: ✅ Online")
+st.caption("Élő adatbázis kapcsolat: ✅ Online (Hivatalos FIFA 2026 Szabályzat)")
 
 tab_group, tab_ko, tab_scorers = st.tabs(["📊 Csoportkör", "⚔️ Egyenes Kiesés", "🔥 Góllövőlista"])
 
@@ -208,7 +269,7 @@ with tab_group:
             
             if st.form_submit_button("Meccs mentése"):
                 if home == away:
-                    st.error("Egy csapat nem játszhat önmaga ellen!")
+                    st.error("Egy csapat nem játszhat önmaga alkali ellen!")
                 else:
                     s_list = [s.strip() for s in scorer_input.split(",") if s.strip()]
                     st.session_state.matches.append({
@@ -225,7 +286,9 @@ with tab_group:
         group_tabs = st.tabs(list(GROUPS.keys()))
         for i, (g_name, g_teams) in enumerate(GROUPS.items()):
             with group_tabs[i]:
-                sub_df = df_group.loc[g_teams].sort_values(by=['P', 'GK', 'RG'], ascending=False).reset_index()
+                # Itt is a hivatalos rendező függvényt hívjuk meg a táblázat megjelenítéséhez
+                ordered_teams = sort_group_teams_official(g_teams)
+                sub_df = df_group.loc[ordered_teams].reset_index()
                 sub_df.rename(columns={'index': 'Csapat'}, inplace=True)
                 sub_df.index = range(1, len(sub_df) + 1)
                 st.dataframe(sub_df, use_container_width=True)
@@ -233,17 +296,12 @@ with tab_group:
 with tab_ko:
     st.header("⚔️ Egyenes Kieséses Szakasz")
     
-    # Ellenőrizzük, hogy van-e már rögzített csoportmeccs egyáltalán
-    df_group = calculate_group_stats()
     total_group_matches = len([m for m in st.session_state.matches if m.get('type') == 'group'])
     
-    # 12 csoport van, csoportonként 6 meccs = összesen 72 meccs lenne a teljes kör, 
-    # de engedjük sorsolni akkor is, ha már van benne adat (vagy ha teljesen kész)
     if total_group_matches < 72:
-        st.warning(f"⚠️ Eddig {total_group_matches} csoportmeccs lett rögzítve a 72-ből. A hivatalos sorsolás gomb akkor lesz aktív, ha minden csoportmeccs véget ért!")
+        st.warning(f"⚠️ Eddig {total_group_matches} csoportmeccs lett rögzítve a 72-ből. A sorsolás gomb akkor lesz aktív, ha minden csoportmeccs véget ért!")
     
     if not st.session_state.ko_state.get('generated', False):
-        # Csak akkor engedjük megnyomni, ha lejátszották a csoportkört, nehogy véletlenül üres táblát sorsoljon
         disabled_status = True if total_group_matches < 72 else False
         
         if st.button("🚀 Hivatalos Sorsolás Generálása", type="primary", disabled=disabled_status):
@@ -332,3 +390,4 @@ if st.session_state.matches:
                     match['home'] = match['away'] = match['winner'] = None
             save_data()
             st.rerun()
+                
