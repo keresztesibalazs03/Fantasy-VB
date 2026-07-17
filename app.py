@@ -6,10 +6,24 @@ import gspread
 
 st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
 
-# --- ADMIN VÉDELEM BEÁLLÍTÁSA ---
-# Oldalsávon lévő jelszó bekérő. Ha a jelszó "fifa2026", akkor bekapcsol az admin mód.
+# --- FEJLÉC ÉS MENÜ ELTÜNTETÉSE A LÁTOGATÓK ELŐL ---
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            header {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+# --- ADMIN VÉDELEM BEÁLLÍTÁSA TITKOS JELSZÓVAL ---
 admin_password = st.sidebar.text_input("🔒 Admin jelszó:", type="password")
-is_admin = (admin_password == "ArAnYhÖrCsÖg2022")
+
+# Itt már a Streamlit védett "Secrets" menüjéből olvassa ki a jelszót!
+# Ha valamiért nincs beállítva a secrets, alapértelmezetten egy nagyon bonyolult jelszót kér.
+helyes_jelszo = st.secrets.get("admin_pass", "VeszhelyzetiJelszo999!!!")
+
+is_admin = (admin_password == helyes_jelszo)
 
 if not is_admin:
     st.sidebar.info("Csak olvasási mód. A meccsek szerkesztéséhez add meg az admin jelszót!")
