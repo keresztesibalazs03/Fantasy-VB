@@ -10,7 +10,8 @@ st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
 hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
-            header {visibility: hidden;}
+            .stDeployButton {visibility: hidden;}
+            [data-testid="stToolbar"] {visibility: hidden;}
             footer {visibility: hidden;}
             </style>
             """
