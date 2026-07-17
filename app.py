@@ -4,24 +4,13 @@ import random
 import json
 import gspread
 
-st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
-
-# --- FEJLÉC ÉS MENÜ ELTÜNTETÉSE A LÁTOGATÓK ELŐL ---
-hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            .stDeployButton {visibility: hidden;}
-            [data-testid="stToolbar"] {visibility: hidden;}
-            footer {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# Beállítjuk, hogy az oldalsáv alapból kinyitva jelenjen meg
+st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # --- ADMIN VÉDELEM BEÁLLÍTÁSA TITKOS JELSZÓVAL ---
 admin_password = st.sidebar.text_input("🔒 Admin jelszó:", type="password")
 
 # Itt már a Streamlit védett "Secrets" menüjéből olvassa ki a jelszót!
-# Ha valamiért nincs beállítva a secrets, alapértelmezetten egy nagyon bonyolult jelszót kér.
 helyes_jelszo = st.secrets.get("admin_pass", "VeszhelyzetiJelszo999!!!")
 
 is_admin = (admin_password == helyes_jelszo)
@@ -294,7 +283,7 @@ with tab_group:
                         st.success(f"Mentve: {home} {h_goals} - {a_goals} {away}")
                         st.rerun()
         else:
-            st.info("A meccsek rögzítéséhez lépj be az oldalsávon!")
+            st.info("A meccsek rögzítéséhez add meg az admin jelszót a bal oldalsávban!")
 
     with col_table:
         st.header("📊 Csoportok Állása")
