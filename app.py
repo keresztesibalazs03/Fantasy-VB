@@ -6,6 +6,16 @@ import gspread
 
 st.set_page_config(page_title="Hivatalos FIFA 2026 VB Dashboard", layout="wide")
 
+# --- ADMIN VÉDELEM BEÁLLÍTÁSA ---
+# Oldalsávon lévő jelszó bekérő. Ha a jelszó "fifa2026", akkor bekapcsol az admin mód.
+admin_password = st.sidebar.text_input("🔒 Admin jelszó:", type="password")
+is_admin = (admin_password == "ArAnYhÖrCsÖg2022")
+
+if not is_admin:
+    st.sidebar.info("Csak olvasási mód. A meccsek szerkesztéséhez add meg az admin jelszót!")
+else:
+    st.sidebar.success("✅ Admin mód aktív: Szerkesztés engedélyezve!")
+
 # --- HIVATALOS 2026-OS VB CSOPORTOK ---
 GROUPS = {
     "A csoport": ["Mexikó", "Dél-Afrika", "Dél-Korea", "Csehország"],
@@ -63,7 +73,8 @@ try:
     sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/191B5mrm4MJrRX4dvpYyninsq3VwOnEpVoaK2UR03jTY/edit")
     worksheet = sh.worksheet("Munkalap1")
 except Exception as e:
-    st.sidebar.error("⚠️ Google Táblázat kapcsolat sikertelen offline módban fut.")
+    if is_admin:
+        st.sidebar.error("⚠️ Google Táblázat kapcsolat sikertelen, offline módban fut.")
 
 # --- ADATKEZELŐ FÜGGVÉNYEK ---
 def load_data():
@@ -90,7 +101,8 @@ def save_data():
         worksheet.clear()
         worksheet.update(range_name="A1:A2", values=[["Adatok"], [json.dumps(mentes_dict, ensure_ascii=False)]])
     except Exception as e:
-        st.error(f"Hiba a mentés során: {e}")
+        if is_admin:
+            st.error(f"Hiba a mentés során: {e}")
 
 # --- ADATOK INICIALIZÁLÁSA ---
 if 'matches' not in st.session_state or 'ko_state' not in st.session_state:
@@ -125,19 +137,16 @@ def get_all_scorers():
             if s.strip(): scorers[s.strip()] = scorers.get(s.strip(), 0) + 1
     return scorers
 
-# --- HIVATALOS FIFA 2026 EGYSÉGES RENDEZŐ FÜGGVÉNY (Egymás elleni alapon) ---
 def sort_group_teams_official(teams):
     df_all = calculate_group_stats()
     sub_df = df_all.loc[teams].copy()
     
-    # Kigyűjtjük az egymás elleni meccseket a csoportban lévő csapatok között
     group_matches = []
     for m in st.session_state.matches:
         if m.get('type') == 'group' and m['home'] in teams and m['away'] in teams:
             group_matches.append(m)
             
     def get_h2h_score(t1, t2):
-        # t1 pontjai, gólkülönbsége, lőtt gólja t2 ellen
         pts, rg, kg = 0, 0, 0
         for m in group_matches:
             if m['home'] == t1 and m['away'] == t2:
@@ -150,22 +159,12 @@ def sort_group_teams_official(teams):
                 elif m['a_goals'] == m['h_goals']: pts += 1
         return pts, rg - kg, rg
 
-    # Kiszámoljuk a rendezési kulcsot minden csapatnak a FIFA 2026 szabályzat szerint
-    # 1. Alappontok (P)
-    # 2. Egymás elleni pontok (H2H P)
-    # 3. Egymás elleni gólkülönbség (H2H GK)
-    # 4. Egymás elleni lőtt gól (H2H RG)
-    # 5. Összesített gólkülönbség (GK)
-    # 6. Összesített lőtt gól (RG)
-    
     sort_data = []
     for t in teams:
         row = sub_df.loc[t]
-        # Összehasonlítás más csapatokkal holtverseny esetére
         h2h_p_sum, h2h_gk_sum, h2h_rg_sum = 0, 0, 0
         for opponent in teams:
             if opponent != t:
-                # Csak akkor számít az egymás elleni, ha azonos pontszámon állnak az összetettben
                 if sub_df.loc[opponent]['P'] == row['P']:
                     p, gk, rg = get_h2h_score(t, opponent)
                     h2h_p_sum += p
@@ -182,11 +181,9 @@ def sort_group_teams_official(teams):
             'RG': row['RG']
         })
         
-    # Python rendezés a prioritások szerint (descending)
     sorted_structures = sorted(sort_data, key=lambda x: (x['P'], x['H2H_P'], x['H2H_GK'], x['H2H_RG'], x['GK'], x['RG']), reverse=True)
     return [x['team'] for x in sorted_structures]
 
-# --- HIVATALOS FIFA 2026-OS ÁGRENDSZER GENERÁLÓ ---
 def generate_valid_draw(seeded_unused, unseeded_unused):
     df_group = calculate_group_stats()
     group_results = {}
@@ -256,29 +253,33 @@ with tab_group:
     col_input, col_table = st.columns([1, 2])
     with col_input:
         st.header("⚽ Csoportmeccs rögzítése")
-        selected_group = st.selectbox("Válassz csoportot:", list(GROUPS.keys()))
-        group_teams = GROUPS[selected_group]
         
-        with st.form("group_match_form", clear_on_submit=True):
-            home = st.selectbox("Hazai csapat", group_teams, key="h_sel")
-            away = st.selectbox("Vendég csapat", group_teams, key="a_sel")
-            g1, g2 = st.columns(2)
-            h_goals = g1.number_input("Hazai gól", min_value=0, step=1)
-            a_goals = g2.number_input("Vendég gól", min_value=0, step=1)
-            scorer_input = st.text_area("Gólszerzők (vesszővel)", placeholder="Pl: Mbappe, Messi")
+        if is_admin:
+            selected_group = st.selectbox("Válassz csoportot:", list(GROUPS.keys()))
+            group_teams = GROUPS[selected_group]
             
-            if st.form_submit_button("Meccs mentése"):
-                if home == away:
-                    st.error("Egy csapat nem játszhat önmaga alkali ellen!")
-                else:
-                    s_list = [s.strip() for s in scorer_input.split(",") if s.strip()]
-                    st.session_state.matches.append({
-                        "type": "group", "group": selected_group, "home": home, "away": away, 
-                        "h_goals": h_goals, "a_goals": a_goals, "scorers": s_list
-                    })
-                    save_data()
-                    st.success(f"Mentve: {home} {h_goals} - {a_goals} {away}")
-                    st.rerun()
+            with st.form("group_match_form", clear_on_submit=True):
+                home = st.selectbox("Hazai csapat", group_teams, key="h_sel")
+                away = st.selectbox("Vendég csapat", group_teams, key="a_sel")
+                g1, g2 = st.columns(2)
+                h_goals = g1.number_input("Hazai gól", min_value=0, step=1)
+                a_goals = g2.number_input("Vendég gól", min_value=0, step=1)
+                scorer_input = st.text_area("Gólszerzők (vesszővel)", placeholder="Pl: Mbappe, Messi")
+                
+                if st.form_submit_button("Meccs mentése"):
+                    if home == away:
+                        st.error("Egy csapat nem játszhat önmaga ellen!")
+                    else:
+                        s_list = [s.strip() for s in scorer_input.split(",") if s.strip()]
+                        st.session_state.matches.append({
+                            "type": "group", "group": selected_group, "home": home, "away": away, 
+                            "h_goals": h_goals, "a_goals": a_goals, "scorers": s_list
+                        })
+                        save_data()
+                        st.success(f"Mentve: {home} {h_goals} - {a_goals} {away}")
+                        st.rerun()
+        else:
+            st.info("A meccsek rögzítéséhez lépj be az oldalsávon!")
 
     with col_table:
         st.header("📊 Csoportok Állása")
@@ -286,7 +287,6 @@ with tab_group:
         group_tabs = st.tabs(list(GROUPS.keys()))
         for i, (g_name, g_teams) in enumerate(GROUPS.items()):
             with group_tabs[i]:
-                # Itt is a hivatalos rendező függvényt hívjuk meg a táblázat megjelenítéséhez
                 ordered_teams = sort_group_teams_official(g_teams)
                 sub_df = df_group.loc[ordered_teams].reset_index()
                 sub_df.rename(columns={'index': 'Csapat'}, inplace=True)
@@ -302,27 +302,30 @@ with tab_ko:
         st.warning(f"⚠️ Eddig {total_group_matches} csoportmeccs lett rögzítve a 72-ből. A sorsolás gomb akkor lesz aktív, ha minden csoportmeccs véget ért!")
     
     if not st.session_state.ko_state.get('generated', False):
-        disabled_status = True if total_group_matches < 72 else False
-        
-        if st.button("🚀 Hivatalos Sorsolás Generálása", type="primary", disabled=disabled_status):
-            matchups = generate_valid_draw(None, None)
-            
-            if matchups:
-                for i, (h, a) in enumerate(matchups):
-                    st.session_state.ko_state['R32'][i]['home'] = h
-                    st.session_state.ko_state['R32'][i]['away'] = a
-                st.session_state.ko_state['generated'] = True
-                save_data()
-                st.rerun()
-            else:
-                st.error("Hiba történt az ágrendszer felépítése során!")
+        if is_admin:
+            disabled_status = True if total_group_matches < 72 else False
+            if st.button("🚀 Hivatalos Sorsolás Generálása", type="primary", disabled=disabled_status):
+                matchups = generate_valid_draw(None, None)
+                
+                if matchups:
+                    for i, (h, a) in enumerate(matchups):
+                        st.session_state.ko_state['R32'][i]['home'] = h
+                        st.session_state.ko_state['R32'][i]['away'] = a
+                    st.session_state.ko_state['generated'] = True
+                    save_data()
+                    st.rerun()
+                else:
+                    st.error("Hiba történt az ágrendszer felépítése során!")
+        else:
+            st.info("A sorsolást csak az admin tudja elindítani.")
             
     else:
         st.success("✅ A hivatalos FIFA 2026-os ágrendszer sikeresen legenerálva és mentve!")
-        if st.button("Sorsolás törlése és Újragenerálás"):
-            st.session_state.ko_state['generated'] = False
-            save_data()
-            st.rerun()
+        if is_admin:
+            if st.button("Sorsolás törlése és Újragenerálás"):
+                st.session_state.ko_state['generated'] = False
+                save_data()
+                st.rerun()
 
         rounds = [("Legjobb 32", "R32", "R16"), ("Nyolcaddöntő", "R16", "QF"), ("Negyeddöntő", "QF", "SF"), ("Elődöntő", "SF", "F"), ("🏆 Döntő", "F", None)]
         
@@ -331,32 +334,33 @@ with tab_ko:
                 for i, match in enumerate(st.session_state.ko_state[current_key]):
                     if match['home'] and match['away']:
                         if not match['winner']:
-                            with st.form(f"form_{current_key}_{i}"):
-                                st.write(f"**{match['home']} 🆚 {match['away']}**")
-                                c1, c2, c3 = st.columns(3)
-                                h_g = c1.number_input(f"{match['home']} gól", 0, step=1)
-                                a_g = c2.number_input(f"{match['away']} gól", 0, step=1)
-                                default_idx = 0 if h_g >= a_g else 1
-                                winner = c3.selectbox("Továbbjutó", [match['home'], match['away']], index=default_idx)
-                                scorers = st.text_input("Gólszerzők (vesszővel)")
-                                
-                                if st.form_submit_button("Mentés"):
-                                    st.session_state.ko_state[current_key][i]['winner'] = winner
-                                    if scorers:
-                                        st.session_state.matches.append({
-                                            "type": "ko", "home": match['home'], "away": match['away'],
-                                            "h_goals": h_g, "a_goals": a_g, 
-                                            "scorers": [s.strip() for s in scorers.split(",") if s.strip()]
-                                        })
-                                    if next_key:
-                                        next_idx = i // 2
-                                        if i % 2 != 0: st.session_state.ko_state[next_key][next_idx]['away'] = winner
-                                        else: st.session_state.ko_state[next_key][next_idx]['home'] = winner
-                                    elif current_key == "F":
-                                        st.balloons()
-                                        st.success(f"🎉 A Világbajnok: {winner}! 🎉")
-                                    save_data()
-                                    st.rerun()
+                            st.write(f"**{match['home']} 🆚 {match['away']}**")
+                            if is_admin:
+                                with st.form(f"form_{current_key}_{i}"):
+                                    c1, c2, c3 = st.columns(3)
+                                    h_g = c1.number_input(f"{match['home']} gól", 0, step=1)
+                                    a_g = c2.number_input(f"{match['away']} gól", 0, step=1)
+                                    default_idx = 0 if h_g >= a_g else 1
+                                    winner = c3.selectbox("Továbbjutó", [match['home'], match['away']], index=default_idx)
+                                    scorers = st.text_input("Gólszerzők (vesszővel)")
+                                    
+                                    if st.form_submit_button("Mentés"):
+                                        st.session_state.ko_state[current_key][i]['winner'] = winner
+                                        if scorers:
+                                            st.session_state.matches.append({
+                                                "type": "ko", "home": match['home'], "away": match['away'],
+                                                "h_goals": h_g, "a_goals": a_g, 
+                                                "scorers": [s.strip() for s in scorers.split(",") if s.strip()]
+                                            })
+                                        if next_key:
+                                            next_idx = i // 2
+                                            if i % 2 != 0: st.session_state.ko_state[next_key][next_idx]['away'] = winner
+                                            else: st.session_state.ko_state[next_key][next_idx]['home'] = winner
+                                        elif current_key == "F":
+                                            st.balloons()
+                                            st.success(f"🎉 A Világbajnok: {winner}! 🎉")
+                                        save_data()
+                                        st.rerun()
                         else:
                             st.info(f"✅ {match['home']} - {match['away']} | Továbbjutott: **{match['winner']}**")
 
@@ -370,24 +374,29 @@ with tab_scorers:
         st.write("Még nincs rögzített gól.")
 
 if st.session_state.matches:
-    with st.sidebar.expander("🕒 Meccstörténet / Törlés"):
-        for i, m in enumerate(st.session_state.matches):
-            szakasz = m.get('group', 'Kieséses')
-            col_text, col_btn = st.columns([4, 1])
-            with col_text:
+    if is_admin:
+        with st.sidebar.expander("🕒 Meccstörténet / Törlés"):
+            for i, m in enumerate(st.session_state.matches):
+                szakasz = m.get('group', 'Kieséses')
+                col_text, col_btn = st.columns([4, 1])
+                with col_text:
+                    st.write(f"[{szakasz[:3]}] {m['home']} {m['h_goals']}-{m['a_goals']} {m['away']}")
+                with col_btn:
+                    if st.button("❌", key=f"del_match_{i}"):
+                        st.session_state.matches.pop(i)
+                        save_data()
+                        st.rerun()
+                        
+            if st.button("🚨 Teljes törlés (VIGYÁZZ)"):
+                st.session_state.matches = []
+                st.session_state.ko_state['generated'] = False
+                for k in ['R32', 'R16', 'QF', 'SF', 'F']:
+                    for match in st.session_state.ko_state[k]:
+                        match['home'] = match['away'] = match['winner'] = None
+                save_data()
+                st.rerun()
+    else:
+        with st.sidebar.expander("🕒 Meccstörténet"):
+            for i, m in enumerate(st.session_state.matches):
+                szakasz = m.get('group', 'Kieséses')
                 st.write(f"[{szakasz[:3]}] {m['home']} {m['h_goals']}-{m['a_goals']} {m['away']}")
-            with col_btn:
-                if st.button("❌", key=f"del_match_{i}"):
-                    st.session_state.matches.pop(i)
-                    save_data()
-                    st.rerun()
-                    
-        if st.button("🚨 Teljes törlés (VIGYÁZZ)"):
-            st.session_state.matches = []
-            st.session_state.ko_state['generated'] = False
-            for k in ['R32', 'R16', 'QF', 'SF', 'F']:
-                for match in st.session_state.ko_state[k]:
-                    match['home'] = match['away'] = match['winner'] = None
-            save_data()
-            st.rerun()
-                
